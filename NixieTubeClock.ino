@@ -26,16 +26,11 @@ uint8_t brightness = 0; //brightness of the nixie tubes
 
 void setup() {
   Wire.begin();
-
+  
   pinMode(serial, OUTPUT);
   pinMode(latch, OUTPUT);
   pinMode(clk, OUTPUT);
   pinMode(boostPin, OUTPUT);
-
-  pinMode(A2, OUTPUT);
-  pinMode(A3, OUTPUT);
-  digitalWrite(A2, LOW);
-  digitalWrite(A3, HIGH);
 
   pinMode(DSTPin, INPUT_PULLUP);
   pinMode(potPin, INPUT);
