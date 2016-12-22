@@ -17,16 +17,17 @@
 
 //Variables
 String currentTime = ""; // current time formatted for the shift registers
-uint8_t daylight = 0; //daylight savings offset
-uint8_t cHour = 0; //current hour
-uint8_t cMinute = 0; //current minute
-uint8_t cSecond = 0;  //current second
-uint16_t potIn = 0; //position of potentiometer
-uint8_t brightness = 0; //brightness of the nixie tubes
+uint8_t daylight; //daylight savings offset
+uint8_t cHour; //current hour
+uint8_t pHour; //past hour data -- used to cycle the nixie tube clocks each hour
+uint8_t cMinute; //current minute
+uint8_t cSecond;  //current second
+uint16_t potIn; //position of potentiometer
+uint8_t brightness; //brightness of the nixie tubes
 
 void setup() {
   Wire.begin();
-  
+
   pinMode(serial, OUTPUT);
   pinMode(latch, OUTPUT);
   pinMode(clk, OUTPUT);
@@ -41,11 +42,14 @@ void loop() {
   //This changes the brigtness of the nixie tubes and gives the option of turning the tubes off completely
   potIn = analogRead(potPin);
   delayMicroseconds(100);
-  potIn <= 2 ? brightness = 0 : brightness = map(potIn, 3, 1023, 100, 150);
+  potIn <= 2 ? brightness = 0 : brightness = map(potIn, 3, 1023, 3, 255);
   analogWrite(boostPin, brightness);
 
   //if the daylight savings time switch is on, add add 1 hour to the current time
   digitalRead(DSTPin) == LOW ? daylight = 1 : daylight = 0;
+
+  //set the past hour to the current hour data. This is used to determine when to cycle the nixie tubes
+  pHour = cHour;
 
   //Interface with the RTC
   Wire.beginTransmission(rtc);
@@ -59,7 +63,12 @@ void loop() {
 
   //takes current time and sends it to the shift registers
   currentTime = timeData(cHour + daylight, cMinute, cSecond); // current time binary data. Each nibble represents a digit.
-  shiftTime(serial, latch, clk, currentTime);
+  shiftTime(serial, latch, clk, currentTime); //send current time to the shift registers
+
+  //cycles nixie tubes every hour that they are on
+  if (brightness > 0 && pHour != cHour) {
+    cycleTubes();
+  }
 }
 
 
@@ -86,7 +95,7 @@ String toNibble (String input) { //converts binary character string to a binary 
   return output;
 }
 
-void shiftTime (int serialPin, int latchPin, int clockPin, String inputTime) { //sends a binary string to shift registers
+void shiftTime (uint8_t serialPin, uint8_t latchPin, uint8_t clockPin, String inputTime) { //sends a binary string to shift registers
   digitalWrite(latchPin, LOW);//set latch pin low to prepare for data to be sent
   for (int8_t i = inputTime.length() - 1; i > -1; i--) { //iterates over entire length of input string
     byte currentChar = inputTime.charAt(i);//gets character "i" in the binary string
@@ -103,6 +112,15 @@ void shiftTime (int serialPin, int latchPin, int clockPin, String inputTime) { /
   }
   digitalWrite(latchPin, HIGH);//lock in data on shift register
 }
+
+void cycleTubes () {
+  for (uint8_t i = 0; i < 1000; i++) {
+    String cycleData = timeData(i % 10, i % 10, i % 10);
+    shiftTime(serial, latch, clk, cycleData);
+    delay(100);
+  }
+}
+
 uint8_t readTime (uint8_t input) { //makes time human readable (0-60 and 0-24)
   return ((input / 16 * 10) + (input % 16));
 }
