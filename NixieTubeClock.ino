@@ -16,8 +16,8 @@
 #define rtc 0x68
 
 //Variables
-String currentTime = ""; // current time formatted for the shift registers
-uint8_t daylight; //daylight savings offset
+String currentTime; // current time formatted for the shift registers
+int8_t daylight; //daylight savings offset
 uint8_t cHour; //current hour
 uint8_t pHour; //past hour data -- used to cycle the nixie tube clocks each hour
 uint8_t cMinute; //current minute
@@ -45,9 +45,6 @@ void loop() {
   potIn <= 2 ? brightness = 0 : brightness = map(potIn, 3, 1023, 3, 255);
   analogWrite(boostPin, brightness);
 
-  //if the daylight savings time switch is on, add add 1 hour to the current time
-  digitalRead(DSTPin) == LOW ? daylight = 1 : daylight = 0;
-
   //set the past hour to the current hour data. This is used to determine when to cycle the nixie tubes
   pHour = cHour;
 
@@ -61,6 +58,9 @@ void loop() {
   cMinute = readTime(Wire.read() & 0x7f); //minute
   cHour = readTime(Wire.read() & 0x3f); //hour
 
+  //if the daylight savings time switch is on, add add 1 hour to the current time
+  digitalRead(DSTPin) == LOW ? (cHour == 23 ? daylight = -23 : daylight = 1) : daylight = 0;
+
   //takes current time and sends it to the shift registers
   currentTime = timeData(cHour + daylight, cMinute, cSecond); // current time binary data. Each nibble represents a digit.
   shiftTime(serial, latch, clk, currentTime); //send current time to the shift registers
@@ -70,7 +70,6 @@ void loop() {
     cycleTubes();
   }
 }
-
 
 //Functions
 String timeData(uint8_t h, uint8_t m, uint8_t s) { //takes the current time and outputs the required data for shift register
