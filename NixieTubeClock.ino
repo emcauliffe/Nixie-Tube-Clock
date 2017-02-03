@@ -11,8 +11,6 @@
 #define latch 3
 #define clk 4
 #define DSTPin 9
-#define potPin A0
-#define boostPin 5
 #define rtc 0x68
 
 //Variables
@@ -22,8 +20,6 @@ uint8_t cHour; //current hour
 uint8_t pHour; //past hour data -- used to cycle the nixie tube clocks each hour
 uint8_t cMinute; //current minute
 uint8_t cSecond;  //current second
-uint16_t potIn; //position of potentiometer
-uint8_t brightness; //brightness of the nixie tubes
 
 void setup() {
   Wire.begin();
@@ -31,30 +27,19 @@ void setup() {
   pinMode(serial, OUTPUT);
   pinMode(latch, OUTPUT);
   pinMode(clk, OUTPUT);
-  pinMode(boostPin, OUTPUT);
 
   pinMode(DSTPin, INPUT_PULLUP);
-  pinMode(potPin, INPUT);
 }
 
 void loop() {
-  //Read the analog value of the potentiometer and write as a pwm signal
-  //This changes the brigtness of the nixie tubes and gives the option of turning the tubes off completely
-  potIn = analogRead(potPin);
-  delayMicroseconds(100);
-  potIn <= 2 ? brightness = 0 : brightness = map(potIn, 3, 1023, 3, 255);
-  analogWrite(boostPin, brightness);
-
-  //set the past hour to the current hour data. This is used to determine when to cycle the nixie tubes
-  pHour = cHour;
-
   //Interface with the RTC
   Wire.beginTransmission(rtc);
   Wire.write(0); //prepare rtc to be read from
   Wire.endTransmission();
-  //read current second, minute and hour
   Wire.requestFrom(rtc, 7);
-  cSecond = readTime((Wire.read())); //second
+  while (Wire.available() == 0);
+  //read current  minute and hour
+  cSecond = readTime(Wire.read());//second
   cMinute = readTime(Wire.read() & 0x7f); //minute
   cHour = readTime(Wire.read() & 0x3f); //hour
 
@@ -62,26 +47,27 @@ void loop() {
   digitalRead(DSTPin) == LOW ? (cHour == 23 ? daylight = -23 : daylight = 1) : daylight = 0;
 
   //takes current time and sends it to the shift registers
-  currentTime = timeData(cHour + daylight, cMinute, cSecond); // current time binary data. Each nibble represents a digit.
+  currentTime = timeData(cHour + daylight, cMinute); // current time binary data. Each nibble represents a digit.
   shiftTime(serial, latch, clk, currentTime); //send current time to the shift registers
 
   //cycles nixie tubes every hour that they are on
-  if (brightness > 0 && pHour != cHour) {
+  if (pHour != cHour && cMinute == 0 && cSecond == 0) {
     cycleTubes();
   }
+
+  //set the past hour to the current hour data. This is used to determine when to cycle the nixie tubes
+  pHour = cHour;
 }
 
 //Functions
-String timeData(uint8_t h, uint8_t m, uint8_t s) { //takes the current time and outputs the required data for shift register
-  String secondsOnes = toNibble(String((s % 10), BIN));//converts ones digit to binary nibble
-  String secondsTens = toNibble(String((s / 10 % 10), BIN));//converts tens digit to binary nibble
-  String minutesOnes = toNibble(String((m % 10), BIN));
-  String minutesTens = toNibble(String((m / 10 % 10), BIN));
+String timeData(uint8_t h, uint8_t m) { //takes the current time and outputs the required data for shift register
+  String minutesOnes = toNibble(String((m % 10), BIN));//converts ones digit to binary nibble
+  String minutesTens = toNibble(String((m / 10 % 10), BIN));//converts tens digit to binary nibble
   String hoursOnes = toNibble(String((h % 10), BIN));
   String hoursTens = toNibble(String((h / 10 % 10), BIN));
 
   //output a string of the all binary nibbles for each digit in the time
-  String output = hoursTens + hoursOnes + minutesTens + minutesOnes + secondsTens + secondsOnes;
+  String output = hoursTens + hoursOnes + minutesTens + minutesOnes;
   return output;
 }
 
@@ -113,10 +99,11 @@ void shiftTime (uint8_t serialPin, uint8_t latchPin, uint8_t clockPin, String in
 }
 
 void cycleTubes () {
-  for (uint8_t i = 0; i < 1000; i++) {
-    String cycleData = timeData(i % 10, i % 10, i % 10);
+  for (uint16_t i = 0; i < 1000; i++) {
+    uint8_t cycleDigits = ((i % 10) * 10) + i % 10;
+    String cycleData = timeData(cycleDigits, cycleDigits);
     shiftTime(serial, latch, clk, cycleData);
-    delay(100);
+    delay(i / 20 + 1);
   }
 }
 
