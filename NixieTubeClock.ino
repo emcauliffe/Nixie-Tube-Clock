@@ -1,7 +1,7 @@
 //Name: Ethan McAuliffe
 //Date: 2016-12-17
 //Project: Nixie Tube Clock
-//Status: In Development
+//Status: Functional and Tested
 
 //Libraries
 #include <Wire.h>
@@ -17,7 +17,6 @@
 String currentTime; // current time formatted for the shift registers
 int8_t daylight; //daylight savings offset
 uint8_t cHour; //current hour
-uint8_t pHour; //past hour data -- used to cycle the nixie tube clocks each hour
 uint8_t cMinute; //current minute
 uint8_t cSecond;  //current second
 
@@ -51,12 +50,9 @@ void loop() {
   shiftTime(serial, latch, clk, currentTime); //send current time to the shift registers
 
   //cycles nixie tubes every hour that they are on
-  if (pHour != cHour && cMinute == 0 && cSecond == 0) {
+  if (cMinute == 0 && cSecond == 0) {
     cycleTubes();
   }
-
-  //set the past hour to the current hour data. This is used to determine when to cycle the nixie tubes
-  pHour = cHour;
 }
 
 //Functions
@@ -98,12 +94,12 @@ void shiftTime (uint8_t serialPin, uint8_t latchPin, uint8_t clockPin, String in
   digitalWrite(latchPin, HIGH);//lock in data on shift register
 }
 
-void cycleTubes () {
+void cycleTubes () {//cycle all of the digits in unison to prevent cathode poisioning
   for (uint16_t i = 0; i < 1000; i++) {
     uint8_t cycleDigits = ((i % 10) * 10) + i % 10;
     String cycleData = timeData(cycleDigits, cycleDigits);
     shiftTime(serial, latch, clk, cycleData);
-    delay(i / 20 + 1);
+    delay(i / 15 + 1);
   }
 }
 
